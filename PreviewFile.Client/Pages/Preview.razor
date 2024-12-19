@@ -1,0 +1,233 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+
+<div class="preview-container mx-auto">
+    @if (File != null)
+    {
+        @if (ShowInfo)
+        {
+            <div class="file-details">
+                <h4>File Details</h4>
+                <p>Name: @File.Name</p>
+                <p>Size: @(File.Size / 1024) KB</p>
+                <p>Type: @File.ContentType</p>
+            </div>
+        }
+
+        @switch (GetFileType())
+        {
+            case FileType.Image:
+                <img src="@imageDataUrl" alt="Preview" class="img-fluid preview-image" style="max-width: 90vw; max-height: 90vh;"/>
+                break;
+            case FileType.Video:
+                <video controls class="preview-video">
+                    <source src="@videoDataUrl" type="@File.ContentType" />
+                    Your browser does not support the video tag.
+                </video>
+                break;
+            case FileType.Pdf:
+                @if (pdfLoadingStatus == PdfLoadStatus.Loaded)
+                {
+                    <p>
+                        Your browser doesn't support PDF preview.
+                        <a href="@pdfDataUrl" download="@File.Name">Download PDF</a>
+                    </p>
+                    <div class="pdf-preview">
+                        <iframe src="@pdfDataUrl"
+                                width="100%"
+                                height="800px"
+                                style="border: none;"
+                                allow="fullscreen">
+                            
+                        </iframe>
+                        
+                    </div>
+                }
+                else if (pdfLoadingStatus == PdfLoadStatus.Loading)
+                {
+                    <div class="loading-spinner">
+                        Đang tải PDF...
+                    </div>
+                }
+                else
+                {
+                    <div class="error-message">
+                        Không thể tải file PDF
+                    </div>
+                }
+                break;
+            default:
+                <p class="text-warning">Unsupported file type</p>
+                break;
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IBrowserFile File { get; set; }
+    [Parameter]
+    public Boolean ShowInfo { get; set; }
+
+    private string imageDataUrl;
+    private string videoDataUrl;
+    private string pdfDataUrl;
+
+    private enum FileType
+    {
+        Image,
+        Video,
+        Pdf,
+        Unsupported
+    }
+
+    private enum PdfLoadStatus 
+    {
+        NotLoaded,
+        Loading,
+        Loaded,
+        Error
+    }
+    private PdfLoadStatus pdfLoadingStatus = PdfLoadStatus.NotLoaded;
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (File != null)
+        {
+            switch (GetFileType())
+            {
+                case FileType.Image:
+                    await LoadImageAsync();
+                    break;
+                case FileType.Video:
+                    await LoadVideoAsync();
+                    break;
+                case FileType.Pdf:
+                    await LoadPdfAsync();
+                    break;
+            }
+        }
+    }
+
+    private FileType GetFileType()
+    {
+        if (File == null) return FileType.Unsupported;
+
+        string contentType = File.ContentType.ToLower();
+
+        if (contentType.StartsWith("image/"))
+            return FileType.Image;
+        else if (contentType.StartsWith("video/"))
+            return FileType.Video;
+        else if (contentType == "application/pdf")
+            return FileType.Pdf;
+
+        return FileType.Unsupported;
+    }
+
+    private async Task LoadImageAsync()
+    {
+        var buffer = new byte[File.Size];
+        await File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).ReadAsync(buffer);
+        imageDataUrl = $"data:{File.ContentType};base64,{Convert.ToBase64String(buffer)}";
+    }
+
+    private async Task LoadVideoAsync()
+    {
+        var buffer = new byte[File.Size];
+        await File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).ReadAsync(buffer);
+        videoDataUrl = $"data:{File.ContentType};base64,{Convert.ToBase64String(buffer)}";
+    }
+    private async Task LoadPdfAsync()
+    {
+        try
+        {
+            pdfLoadingStatus = PdfLoadStatus.Loading;
+            StateHasChanged();
+
+            using var memoryStream = new MemoryStream();
+            await File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(memoryStream);
+
+            byte[] pdfBytes = memoryStream.ToArray();
+
+            if (IsPdfValid(pdfBytes))
+            {
+                pdfDataUrl = $"data:application/pdf;base64,{Convert.ToBase64String(pdfBytes)}";
+                pdfLoadingStatus = PdfLoadStatus.Loaded;
+            }
+            else
+            {
+                pdfLoadingStatus = PdfLoadStatus.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            pdfLoadingStatus = PdfLoadStatus.Error;
+            Console.WriteLine($"Error loading PDF: {ex.Message}");
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+    // private async Task LoadPdfAsync()
+    // {
+    //     try
+    //     {
+    //         pdfLoadingStatus = PdfLoadStatus.Loading;
+    //         StateHasChanged();
+
+    //         // Tăng giới hạn kích thước file
+    //         using var memoryStream = new MemoryStream();
+    //         await File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(memoryStream);
+
+    //         byte[] pdfBytes = memoryStream.ToArray();
+
+    //         // Chi tiết log để debug
+    //         Console.WriteLine($"PDF Bytes Length: {pdfBytes.Length}");
+    //         Console.WriteLine($"First 10 bytes: {string.Join(", ", pdfBytes.Take(10))}");
+
+    //         if (IsPdfValid(pdfBytes))
+    //         {
+    //             // Thử nghiệm với việc cắt base64 ngắn hơn
+    //             string base64Pdf = Convert.ToBase64String(pdfBytes);
+
+    //             // Log base64 để debug
+    //             Console.WriteLine($"Base64 Length: {base64Pdf.Length}");
+    //             Console.WriteLine($"Base64 Start: {base64Pdf.Substring(0, Math.Min(50, base64Pdf.Length))}");
+
+    //             pdfDataUrl = $"data:application/pdf;base64,{base64Pdf}";
+    //             pdfLoadingStatus = PdfLoadStatus.Loaded;
+    //             StateHasChanged();
+    //         }
+    //         else
+    //         {
+    //             pdfLoadingStatus = PdfLoadStatus.Error;
+    //             Console.WriteLine("Invalid PDF signature detected");
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         pdfLoadingStatus = PdfLoadStatus.Error;
+    //         Console.WriteLine($"PDF Loading Error: {ex.Message}");
+    //     }
+    // }
+
+    private bool IsPdfValid(byte[] pdfBytes)
+    {
+        // Nâng cấp kiểm tra chữ ký PDF
+        if (pdfBytes == null || pdfBytes.Length < 5)
+            return false;
+
+        // Kiểm tra chữ ký PDF
+        bool hasValidSignature =
+            pdfBytes[0] == '%' &&
+            pdfBytes[1] == 'P' &&
+            pdfBytes[2] == 'D' &&
+            pdfBytes[3] == 'F' &&
+            pdfBytes[4] == '-';
+
+        return hasValidSignature;
+    }
+}

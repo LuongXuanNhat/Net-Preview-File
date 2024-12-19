@@ -1,0 +1,42 @@
+﻿.file-upload-container {
+    max-width: 500px;
+    margin: 60px auto;
+    background-color: #f8f9fa;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.file-upload-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.file-upload-label {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    text-align: center;
+    background-color: #007bff;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.file-upload-label:hover {
+    background-color: #0056b3;
+}
+
+.file-name {
+    margin-top: 15px;
+    text-align: center;
+    color: #6c757d;
+}

@@ -1,0 +1,5 @@
+﻿.preview-container {
+    width: 1000px;
+    display: flex;
+    justify-content: center;
+}

@@ -1,0 +1,37 @@
+﻿@page "/demo"
+@rendermode InteractiveWebAssembly
+
+<PageTitle>Demo preview file</PageTitle>
+
+<div class="container">
+    <div class="file-upload-container"> 
+        <form id="fileUploadForm" >
+            <InputFile OnChange="OnFileSelected" id="fileUpload" class="d-none"/>
+            <label for="fileUpload" class="file-upload-label">
+                <i class="bi bi-cloud-upload me-2"></i>
+                Chọn file để tải lên
+            </label>
+            <div id="fileName" class="file-name">
+                @FileName
+            </div>
+        </form>
+    </div>
+    <div>
+        <Preview 
+            File="SelectedFile" 
+            ShowInfo=false
+        />
+    </div>
+</div>
+
+@code {
+    private string FileName { get; set; } = "Chưa chọn file nào";
+    private IBrowserFile SelectedFile { get; set; }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        SelectedFile = e.File; 
+        FileName = SelectedFile.Name; 
+        StateHasChanged(); 
+    }
+}
