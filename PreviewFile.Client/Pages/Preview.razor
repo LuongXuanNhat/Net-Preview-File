@@ -28,16 +28,12 @@
             case FileType.Pdf:
                 @if (pdfLoadingStatus == PdfLoadStatus.Loaded)
                 {
-                    <p>
-                        Your browser doesn't support PDF preview.
-                        <a href="@pdfDataUrl" download="@File.Name">Download PDF</a>
-                    </p>
                     <div class="pdf-preview">
                         <iframe src="@pdfDataUrl"
-                                width="100%"
-                                height="800px"
-                                style="border: none;"
-                                allow="fullscreen">
+                            width="100%"
+                            height="1000px"
+                            style="border: none;"
+                            allow="fullscreen">
                             
                         </iframe>
                         
@@ -47,12 +43,14 @@
                 {
                     <div class="loading-spinner">
                         Đang tải PDF...
+                        <p>Vui lòng chờ trong giây lát.</p> 
                     </div>
                 }
                 else
                 {
                     <div class="error-message">
-                        Không thể tải file PDF
+                        Không thể tải file PDF.
+                        <a href="@pdfDataUrl" download="@File.Name">Thử tải xuống</a> <!-- Thêm link tải xuống -->
                     </div>
                 }
                 break;
@@ -147,18 +145,23 @@
             StateHasChanged();
 
             using var memoryStream = new MemoryStream();
-            await File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(memoryStream);
+            await File.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024).CopyToAsync(memoryStream);
 
-            byte[] pdfBytes = memoryStream.ToArray();
+            string base64String = Convert.ToBase64String(memoryStream.ToArray());
 
-            if (IsPdfValid(pdfBytes))
+            if (true)
             {
-                pdfDataUrl = $"data:application/pdf;base64,{Convert.ToBase64String(pdfBytes)}";
+                // string base64String = Convert.ToBase64String(pdfBytes);
+                pdfDataUrl = $"data:application/pdf;base64,{base64String}";
                 pdfLoadingStatus = PdfLoadStatus.Loaded;
+               
+                // Console.WriteLine($"File size: {pdfBytes.Length} bytes");
+                Console.WriteLine( base64String);
             }
             else
             {
                 pdfLoadingStatus = PdfLoadStatus.Error;
+                Console.WriteLine("PDF is invalid.");
             }
         }
         catch (Exception ex)
@@ -171,48 +174,6 @@
             StateHasChanged();
         }
     }
-    // private async Task LoadPdfAsync()
-    // {
-    //     try
-    //     {
-    //         pdfLoadingStatus = PdfLoadStatus.Loading;
-    //         StateHasChanged();
-
-    //         // Tăng giới hạn kích thước file
-    //         using var memoryStream = new MemoryStream();
-    //         await File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(memoryStream);
-
-    //         byte[] pdfBytes = memoryStream.ToArray();
-
-    //         // Chi tiết log để debug
-    //         Console.WriteLine($"PDF Bytes Length: {pdfBytes.Length}");
-    //         Console.WriteLine($"First 10 bytes: {string.Join(", ", pdfBytes.Take(10))}");
-
-    //         if (IsPdfValid(pdfBytes))
-    //         {
-    //             // Thử nghiệm với việc cắt base64 ngắn hơn
-    //             string base64Pdf = Convert.ToBase64String(pdfBytes);
-
-    //             // Log base64 để debug
-    //             Console.WriteLine($"Base64 Length: {base64Pdf.Length}");
-    //             Console.WriteLine($"Base64 Start: {base64Pdf.Substring(0, Math.Min(50, base64Pdf.Length))}");
-
-    //             pdfDataUrl = $"data:application/pdf;base64,{base64Pdf}";
-    //             pdfLoadingStatus = PdfLoadStatus.Loaded;
-    //             StateHasChanged();
-    //         }
-    //         else
-    //         {
-    //             pdfLoadingStatus = PdfLoadStatus.Error;
-    //             Console.WriteLine("Invalid PDF signature detected");
-    //         }
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         pdfLoadingStatus = PdfLoadStatus.Error;
-    //         Console.WriteLine($"PDF Loading Error: {ex.Message}");
-    //     }
-    // }
 
     private bool IsPdfValid(byte[] pdfBytes)
     {

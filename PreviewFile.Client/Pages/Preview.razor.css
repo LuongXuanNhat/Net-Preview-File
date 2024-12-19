@@ -1,5 +1,10 @@
 ﻿.preview-container {
-    width: 1000px;
+    width: 1200px;
     display: flex;
     justify-content: center;
+    margin: 40px 12px;
+}
+
+.pdf-preview {
+    width: 100%;
 }

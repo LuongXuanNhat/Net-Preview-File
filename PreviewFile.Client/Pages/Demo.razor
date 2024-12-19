@@ -31,6 +31,7 @@
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         SelectedFile = e.File; 
+        Console.WriteLine(e.File);
         FileName = SelectedFile.Name; 
         StateHasChanged(); 
     }
