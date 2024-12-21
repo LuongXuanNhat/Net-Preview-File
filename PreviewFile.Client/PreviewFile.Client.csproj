@@ -9,6 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Pages\File\Pdf.razor.css" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Pages\File\Pdf.razor.css" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.3" />
   </ItemGroup>
 

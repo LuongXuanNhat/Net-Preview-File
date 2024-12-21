@@ -1,5 +1,6 @@
-﻿@using Microsoft.AspNetCore.Components.Forms
-@using System.IO
+﻿@using PreviewFile.Client.Dtos
+@using PreviewFile.Client.Pages.File
+@using Microsoft.JSInterop
 
 <div class="preview-container mx-auto">
     @if (File != null)
@@ -26,33 +27,7 @@
                 </video>
                 break;
             case FileType.Pdf:
-                @if (pdfLoadingStatus == PdfLoadStatus.Loaded)
-                {
-                    <div class="pdf-preview">
-                        <iframe src="@pdfDataUrl"
-                            width="100%"
-                            height="1000px"
-                            style="border: none;"
-                            allow="fullscreen">
-                            
-                        </iframe>
-                        
-                    </div>
-                }
-                else if (pdfLoadingStatus == PdfLoadStatus.Loading)
-                {
-                    <div class="loading-spinner">
-                        Đang tải PDF...
-                        <p>Vui lòng chờ trong giây lát.</p> 
-                    </div>
-                }
-                else
-                {
-                    <div class="error-message">
-                        Không thể tải file PDF.
-                        <a href="@pdfDataUrl" download="@File.Name">Thử tải xuống</a> <!-- Thêm link tải xuống -->
-                    </div>
-                }
+                <Pdf File="@File" />
                 break;
             default:
                 <p class="text-warning">Unsupported file type</p>
@@ -71,42 +46,6 @@
     private string videoDataUrl;
     private string pdfDataUrl;
 
-    private enum FileType
-    {
-        Image,
-        Video,
-        Pdf,
-        Unsupported
-    }
-
-    private enum PdfLoadStatus 
-    {
-        NotLoaded,
-        Loading,
-        Loaded,
-        Error
-    }
-    private PdfLoadStatus pdfLoadingStatus = PdfLoadStatus.NotLoaded;
-
-
-    protected override async Task OnParametersSetAsync()
-    {
-        if (File != null)
-        {
-            switch (GetFileType())
-            {
-                case FileType.Image:
-                    await LoadImageAsync();
-                    break;
-                case FileType.Video:
-                    await LoadVideoAsync();
-                    break;
-                case FileType.Pdf:
-                    await LoadPdfAsync();
-                    break;
-            }
-        }
-    }
 
     private FileType GetFileType()
     {
@@ -137,58 +76,5 @@
         await File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).ReadAsync(buffer);
         videoDataUrl = $"data:{File.ContentType};base64,{Convert.ToBase64String(buffer)}";
     }
-    private async Task LoadPdfAsync()
-    {
-        try
-        {
-            pdfLoadingStatus = PdfLoadStatus.Loading;
-            StateHasChanged();
 
-            using var memoryStream = new MemoryStream();
-            await File.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024).CopyToAsync(memoryStream);
-
-            string base64String = Convert.ToBase64String(memoryStream.ToArray());
-
-            if (true)
-            {
-                // string base64String = Convert.ToBase64String(pdfBytes);
-                pdfDataUrl = $"data:application/pdf;base64,{base64String}";
-                pdfLoadingStatus = PdfLoadStatus.Loaded;
-               
-                // Console.WriteLine($"File size: {pdfBytes.Length} bytes");
-                Console.WriteLine( base64String);
-            }
-            else
-            {
-                pdfLoadingStatus = PdfLoadStatus.Error;
-                Console.WriteLine("PDF is invalid.");
-            }
-        }
-        catch (Exception ex)
-        {
-            pdfLoadingStatus = PdfLoadStatus.Error;
-            Console.WriteLine($"Error loading PDF: {ex.Message}");
-        }
-        finally
-        {
-            StateHasChanged();
-        }
-    }
-
-    private bool IsPdfValid(byte[] pdfBytes)
-    {
-        // Nâng cấp kiểm tra chữ ký PDF
-        if (pdfBytes == null || pdfBytes.Length < 5)
-            return false;
-
-        // Kiểm tra chữ ký PDF
-        bool hasValidSignature =
-            pdfBytes[0] == '%' &&
-            pdfBytes[1] == 'P' &&
-            pdfBytes[2] == 'D' &&
-            pdfBytes[3] == 'F' &&
-            pdfBytes[4] == '-';
-
-        return hasValidSignature;
-    }
 }

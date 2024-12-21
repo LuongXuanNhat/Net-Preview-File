@@ -1,0 +1,433 @@
+﻿@using System.IO
+@using System.Text.RegularExpressions
+@using System.Security.Cryptography
+@using PreviewFile.Client.Dtos
+@inject IJSRuntime JS
+
+<script src="js/factory_pdf.js"></script>
+
+@if (pdfLoadingStatus == LoadingStatus.Loaded)
+{
+    <div class="pdf-preview">
+        @if (currentPdfAnalysis.Type == PdfType.Secured)
+        {
+            <div class="password-prompt">
+                <input type="password" @bind="pdfPassword" placeholder="Nhập mật khẩu PDF" />
+                <button @onclick="UnlockPdf">Mở khóa</button>
+            </div>
+        }
+
+        @if (canDisplayPdf)
+        {
+            <iframe src="@pdfDataUrl"
+                    width="100%"
+                    height="1000px"
+                    style="border: none;"
+                    allow="fullscreen"
+                    @onload="HandleIframeLoad"
+                    @onerror="HandleIframeError">
+                >
+            </iframe>
+        }
+        else
+        {
+            <div class="alternative-viewer">
+                @switch (currentPdfAnalysis.Type)
+                {
+                    case PdfType.Corrupted:
+                        <div class="error-message">
+                            File PDF bị hỏng. Đang cố gắng khôi phục...
+                            <button @onclick="AttemptRepair">Thử khôi phục</button>
+                        </div>
+                        break;
+                    case PdfType.Unsupported:
+                        <div class="error-message">
+                            Định dạng PDF không được hỗ trợ.
+                            <p>Chi tiết: @currentPdfAnalysis.ErrorMessage</p>
+                        </div>
+                        break;
+                }
+            </div>
+        }
+    </div>
+}
+else if (pdfLoadingStatus == LoadingStatus.Loading)
+{
+    <div class="loading-spinner">
+        Đang tải và phân tích PDF...
+        <p>Vui lòng chờ trong giây lát.</p>
+    </div>
+}
+else
+{
+    <div class="error-message">
+        Không thể tải file PDF.
+        <a href="@pdfDataUrl" download="@File.Name">Thử tải xuống</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public IBrowserFile File { get; set; }
+
+    private string pdfDataUrl;
+    private string pdfPassword;
+    private bool canDisplayPdf = false;
+    private PdfFile currentPdfAnalysis;
+    private byte[] originalPdfBytes;
+
+    public override async Task SetParametersAsync(ParameterView parameters)
+    {
+        var previousFile = File;
+        await base.SetParametersAsync(parameters);
+        if (File != previousFile)
+        {
+            await LoadPdfAsync();
+        }
+    }
+
+    private LoadingStatus pdfLoadingStatus = LoadingStatus.NotLoaded;
+
+    private async Task LoadPdfAsync()
+    {
+        try
+        {
+            pdfLoadingStatus = LoadingStatus.Loading;
+            StateHasChanged();
+
+            using var memoryStream = new MemoryStream();
+            await File.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024).CopyToAsync(memoryStream);
+            byte[] pdfBytes = originalPdfBytes =  memoryStream.ToArray();
+
+            currentPdfAnalysis = await AnalyzePdfAsync(pdfBytes);
+
+            // Xử lý theo loại PDF
+            switch (currentPdfAnalysis.Type)
+            {
+                case PdfType.Standard:
+                case PdfType.Linearized:
+                case PdfType.PDF_A:
+                case PdfType.PDF_X:
+                    await ProcessStandardPdf(pdfBytes);
+                    break;
+
+                case PdfType.Secured:
+                    canDisplayPdf = false;
+                    break;
+
+                case PdfType.Digital_Signed:
+                    await ProcessSignedPdf(pdfBytes);
+                    break;
+
+                case PdfType.Corrupted:
+                    canDisplayPdf = false;
+                    break;
+
+                case PdfType.Unsupported:
+                    canDisplayPdf = false;
+                    break;
+            }
+
+            pdfLoadingStatus = LoadingStatus.Loaded;
+        }
+        catch (Exception ex)
+        {
+            pdfLoadingStatus = LoadingStatus.Error;
+            Console.WriteLine($"Error loading PDF: {ex.Message}");
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task<PdfFile> AnalyzePdfAsync(byte[] pdfBytes)
+    {
+        var result = new PdfFile
+            {
+                FileSize = pdfBytes.Length
+            };
+
+        try
+        {
+            Console.WriteLine("FileSize: " + pdfBytes.Length / (1024 * 1024));
+            if (pdfBytes.Length > 50 * 1024 * 1024) // Nếu lớn hơn 100MB
+            {
+                result.Type = PdfType.Unsupported;
+                result.ErrorMessage = "File quá lớn, vui lòng sử dụng file nhỏ hơn 100MB";
+                return result;
+            }
+            // 1. Kiểm tra signature cơ bản
+            if (!IsValidPdfSignature(pdfBytes))
+            {
+                result.Type = PdfType.Corrupted;
+                return result;
+            }
+
+            // 2. Đọc version
+            result.Version = ExtractPdfVersion(pdfBytes);
+
+            // 3. Kiểm tra PDF có được linearized không
+            result.IsLinearized = CheckIfLinearized(pdfBytes);
+
+            // 4. Kiểm tra encryption
+            result.IsEncrypted = CheckIfEncrypted(pdfBytes);
+
+            // 5. Kiểm tra chữ ký số
+            result.IsDigitallySigned = CheckForDigitalSignature(pdfBytes);
+
+            // 6. Kiểm tra forms
+            result.HasForms = CheckForAcroForms(pdfBytes);
+
+            Console.WriteLine("FileType: " + result.Type);
+            // Xác định loại PDF
+            if (result.IsEncrypted)
+            {
+                result.Type = PdfType.Secured;
+            }
+            else if (result.IsDigitallySigned)
+            {
+                result.Type = PdfType.Digital_Signed;
+            }
+            else if (IsPdfA(pdfBytes))
+            {
+                result.Type = PdfType.PDF_A;
+            }
+            else if (IsPdfX(pdfBytes))
+            {
+                result.Type = PdfType.PDF_X;
+            }
+            else if (result.IsLinearized)
+            {
+                result.Type = PdfType.Linearized;
+            }
+            else
+            {
+                result.Type = PdfType.Standard;
+            }
+        }
+        catch (Exception ex)
+        {
+            result.Type = PdfType.Corrupted;
+            result.ErrorMessage = ex.Message;
+        }
+
+        return result;
+    }
+
+    private bool IsValidPdfSignature(byte[] pdfBytes)
+    {
+        if (pdfBytes == null || pdfBytes.Length < 5)
+            return false;
+
+        // Kiểm tra header PDF
+        return pdfBytes[0] == '%' &&
+               pdfBytes[1] == 'P' &&
+               pdfBytes[2] == 'D' &&
+               pdfBytes[3] == 'F' &&
+               pdfBytes[4] == '-';
+    }
+
+    private string ExtractPdfVersion(byte[] pdfBytes)
+    {
+        // Tìm version trong header PDF
+        var header = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(32, pdfBytes.Length));
+        var versionMatch = Regex.Match(header, @"%PDF-(\d+\.\d+)");
+        return versionMatch.Success ? versionMatch.Groups[1].Value : "Unknown";
+    }
+
+    private bool CheckIfLinearized(byte[] pdfBytes)
+    {
+        // Tìm từ khóa /Linearized trong 1024 bytes đầu tiên
+        var header = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(1024, pdfBytes.Length));
+        return header.Contains("/Linearized");
+    }
+
+    private bool CheckIfEncrypted(byte[] pdfBytes)
+    {
+        // Tìm từ khóa /Encrypt trong file
+        // var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
+        // return content.Contains("/Encrypt");
+
+        int bytesToCheck = Math.Min(1024 * 1024, pdfBytes.Length);
+        var content = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, bytesToCheck);
+        return content.Contains("/Encrypt");
+    }
+
+    private bool CheckForDigitalSignature(byte[] pdfBytes)
+    {
+        // Tìm từ khóa /ByteRange và /Contents (thường xuất hiện trong chữ ký số)
+        // var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
+        // return content.Contains("/ByteRange") && content.Contains("/Contents");
+
+        int bytesToCheck = Math.Min(1024 * 1024, pdfBytes.Length);
+        var startContent = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, bytesToCheck);
+
+        if (pdfBytes.Length > bytesToCheck * 2)
+        {
+            var endContent = System.Text.Encoding.ASCII.GetString(
+                pdfBytes,
+                pdfBytes.Length - bytesToCheck,
+                bytesToCheck
+            );
+            return (startContent.Contains("/ByteRange") && startContent.Contains("/Contents")) ||
+                   (endContent.Contains("/ByteRange") && endContent.Contains("/Contents"));
+        }
+
+        return startContent.Contains("/ByteRange") && startContent.Contains("/Contents");
+    }
+
+    private bool CheckForAcroForms(byte[] pdfBytes)
+    {
+        // Tìm từ khóa /AcroForm
+        var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
+        return content.Contains("/AcroForm");
+    }
+
+    private bool IsPdfA(byte[] pdfBytes)
+    {
+        // Tìm metadata cho PDF/A
+        var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
+        return content.Contains("pdfaid:conformance");
+    }
+
+    private bool IsPdfX(byte[] pdfBytes)
+    {
+        // Tìm metadata cho PDF/X
+        var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
+        return content.Contains("GTS_PDFXVersion");
+    }
+
+    private async Task ProcessStandardPdf(byte[] pdfBytes)
+    {
+        try
+        {
+            Console.WriteLine($"Starting ProcessStandardPdf: Size = {pdfBytes.Length / (1024 * 1024)}MB");
+
+            if (pdfBytes == null || pdfBytes.Length == 0)
+            {
+                throw new Exception("PDF data is empty");
+            }
+
+            const int maxUrlSize = 2 * 1024 * 1024; // 2MB
+            if (pdfBytes.Length > maxUrlSize)
+            {
+                Console.WriteLine("File too large for data URL, using Blob URL");
+
+                // Gọi JS để tạo Blob URL và lấy URL trả về
+                pdfDataUrl = await JS.InvokeAsync<string>("createBlobUrl", pdfBytes);
+                Console.WriteLine($"Created Blob URL: {pdfDataUrl}");
+            }
+            else
+            {
+                Console.WriteLine("Converting to base64...");
+                string base64String = Convert.ToBase64String(pdfBytes);
+                pdfDataUrl = $"data:application/pdf;base64,{base64String}";
+            }
+
+            if (string.IsNullOrEmpty(pdfDataUrl))
+            {
+                throw new Exception("Failed to generate PDF URL");
+            }
+
+            canDisplayPdf = true;
+            Console.WriteLine("PDF processing completed successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in ProcessStandardPdf: {ex.Message}");
+            currentPdfAnalysis.ErrorMessage = $"Lỗi khi xử lý PDF: {ex.Message}";
+            canDisplayPdf = false;
+        }
+    }
+
+    private async Task ProcessSignedPdf(byte[] pdfBytes)
+    {
+        // Xác thực chữ ký số
+        bool isValidSignature = await ValidateDigitalSignature(pdfBytes);
+        if (isValidSignature)
+        {
+            await ProcessStandardPdf(pdfBytes);
+        }
+        else
+        {
+            currentPdfAnalysis.ErrorMessage = "Chữ ký số không hợp lệ";
+            canDisplayPdf = false;
+        }
+    }
+
+    private async Task<bool> ValidateDigitalSignature(byte[] pdfBytes)
+    {
+        // Implement logic để xác thực chữ ký số
+        // Đây là một placeholder, bạn cần implement logic thực tế
+        return true;
+    }
+
+    private async Task UnlockPdf()
+    {
+        try
+        {
+            // Implement logic để mở khóa PDF với mật khẩu
+            // Đây là một placeholder, bạn cần implement logic thực tế
+            if (!string.IsNullOrEmpty(pdfPassword))
+            {
+                // Giả sử mở khóa thành công
+                // await ProcessStandardPdf(/* decrypted pdf bytes */);
+                canDisplayPdf = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            currentPdfAnalysis.ErrorMessage = "Mật khẩu không đúng";
+        }
+    }
+
+    private async Task AttemptRepair()
+    {
+        try
+        {
+            // Implement logic để sửa chữa PDF bị hỏng
+            // Đây là một placeholder, bạn cần implement logic thực tế
+        }
+        catch (Exception ex)
+        {
+            currentPdfAnalysis.ErrorMessage = "Không thể khôi phục file PDF";
+        }
+    }
+
+    private async Task HandleIframeLoad()
+    {
+        Console.WriteLine("PDF iframe loaded successfully");
+    }
+
+    private async Task HandleIframeError()
+    {
+        Console.WriteLine($"Error loading PDF in iframe. URL: {pdfDataUrl}");
+
+        // Thử kiểm tra URL
+        if (string.IsNullOrEmpty(pdfDataUrl))
+        {
+            currentPdfAnalysis.ErrorMessage = "URL không hợp lệ";
+        }
+        else if (pdfDataUrl.StartsWith("blob:"))
+        {
+            // Nếu là Blob URL, thử tạo lại
+            await ProcessStandardPdf(originalPdfBytes); // Lưu bytes gốc trong một field
+        }
+        else
+        {
+            currentPdfAnalysis.ErrorMessage = "Không thể hiển thị PDF trong trình duyệt";
+        }
+
+        canDisplayPdf = false;
+        StateHasChanged();
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (!string.IsNullOrEmpty(pdfDataUrl) && pdfDataUrl.StartsWith("blob:"))
+        {
+            await JS.InvokeVoidAsync("revokeBlobUrl", pdfDataUrl);
+        }
+    }
+
+}
