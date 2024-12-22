@@ -4,6 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+	  <PublishDir>wwwroot\publish\</PublishDir>
+	  <BlazorWebAssemblyEnableLinker>true</BlazorWebAssemblyEnableLinker>
+	  <UseWasm>true</UseWasm>
   </PropertyGroup>
 
   <ItemGroup>

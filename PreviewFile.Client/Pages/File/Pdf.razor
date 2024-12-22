@@ -1,7 +1,10 @@
 ﻿@using System.IO
 @using System.Text.RegularExpressions
 @using System.Security.Cryptography
-@using PreviewFile.Client.Dtos
+@using PreviewFile.Service
+@using PreviewFile.Domain.Dtos
+
+@inject IPreviewFileService Service
 @inject IJSRuntime JS
 
 <script src="js/factory_pdf.js"></script>
@@ -12,8 +15,8 @@
         @if (currentPdfAnalysis.Type == PdfType.Secured)
         {
             <div class="password-prompt">
-                <input type="password" @bind="pdfPassword" placeholder="Nhập mật khẩu PDF" />
-                <button @onclick="UnlockPdf">Mở khóa</button>
+                <input type="password" @bind="pdfPassword" placeholder="Nhập mật khẩu PDF" @onkeydown="HandleKeyDown" />
+                <button @onclick="UnlockPdf" >Mở khóa</button>
             </div>
         }
 
@@ -56,6 +59,7 @@ else if (pdfLoadingStatus == LoadingStatus.Loading)
     <div class="loading-spinner">
         Đang tải và phân tích PDF...
         <p>Vui lòng chờ trong giây lát.</p>
+        <div id="loading"></div>
     </div>
 }
 else
@@ -71,7 +75,7 @@ else
     public IBrowserFile File { get; set; }
 
     private string pdfDataUrl;
-    private string pdfPassword;
+    private string pdfPassword = "";
     private bool canDisplayPdf = false;
     private PdfFile currentPdfAnalysis;
     private byte[] originalPdfBytes;
@@ -82,6 +86,7 @@ else
         await base.SetParametersAsync(parameters);
         if (File != previousFile)
         {
+            pdfPassword = "";
             await LoadPdfAsync();
         }
     }
@@ -98,8 +103,9 @@ else
             using var memoryStream = new MemoryStream();
             await File.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024).CopyToAsync(memoryStream);
             byte[] pdfBytes = originalPdfBytes =  memoryStream.ToArray();
+            Console.WriteLine($"bytes: {pdfBytes}");
 
-            currentPdfAnalysis = await AnalyzePdfAsync(pdfBytes);
+            currentPdfAnalysis = await Service.PdfService.AnalyzePdfAsync(pdfBytes);
 
             // Xử lý theo loại PDF
             switch (currentPdfAnalysis.Type)
@@ -139,164 +145,7 @@ else
         {
             StateHasChanged();
         }
-    }
-
-    private async Task<PdfFile> AnalyzePdfAsync(byte[] pdfBytes)
-    {
-        var result = new PdfFile
-            {
-                FileSize = pdfBytes.Length
-            };
-
-        try
-        {
-            Console.WriteLine("FileSize: " + pdfBytes.Length / (1024 * 1024));
-            if (pdfBytes.Length > 50 * 1024 * 1024) // Nếu lớn hơn 100MB
-            {
-                result.Type = PdfType.Unsupported;
-                result.ErrorMessage = "File quá lớn, vui lòng sử dụng file nhỏ hơn 100MB";
-                return result;
-            }
-            // 1. Kiểm tra signature cơ bản
-            if (!IsValidPdfSignature(pdfBytes))
-            {
-                result.Type = PdfType.Corrupted;
-                return result;
-            }
-
-            // 2. Đọc version
-            result.Version = ExtractPdfVersion(pdfBytes);
-
-            // 3. Kiểm tra PDF có được linearized không
-            result.IsLinearized = CheckIfLinearized(pdfBytes);
-
-            // 4. Kiểm tra encryption
-            result.IsEncrypted = CheckIfEncrypted(pdfBytes);
-
-            // 5. Kiểm tra chữ ký số
-            result.IsDigitallySigned = CheckForDigitalSignature(pdfBytes);
-
-            // 6. Kiểm tra forms
-            result.HasForms = CheckForAcroForms(pdfBytes);
-
-            Console.WriteLine("FileType: " + result.Type);
-            // Xác định loại PDF
-            if (result.IsEncrypted)
-            {
-                result.Type = PdfType.Secured;
-            }
-            else if (result.IsDigitallySigned)
-            {
-                result.Type = PdfType.Digital_Signed;
-            }
-            else if (IsPdfA(pdfBytes))
-            {
-                result.Type = PdfType.PDF_A;
-            }
-            else if (IsPdfX(pdfBytes))
-            {
-                result.Type = PdfType.PDF_X;
-            }
-            else if (result.IsLinearized)
-            {
-                result.Type = PdfType.Linearized;
-            }
-            else
-            {
-                result.Type = PdfType.Standard;
-            }
-        }
-        catch (Exception ex)
-        {
-            result.Type = PdfType.Corrupted;
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
-    }
-
-    private bool IsValidPdfSignature(byte[] pdfBytes)
-    {
-        if (pdfBytes == null || pdfBytes.Length < 5)
-            return false;
-
-        // Kiểm tra header PDF
-        return pdfBytes[0] == '%' &&
-               pdfBytes[1] == 'P' &&
-               pdfBytes[2] == 'D' &&
-               pdfBytes[3] == 'F' &&
-               pdfBytes[4] == '-';
-    }
-
-    private string ExtractPdfVersion(byte[] pdfBytes)
-    {
-        // Tìm version trong header PDF
-        var header = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(32, pdfBytes.Length));
-        var versionMatch = Regex.Match(header, @"%PDF-(\d+\.\d+)");
-        return versionMatch.Success ? versionMatch.Groups[1].Value : "Unknown";
-    }
-
-    private bool CheckIfLinearized(byte[] pdfBytes)
-    {
-        // Tìm từ khóa /Linearized trong 1024 bytes đầu tiên
-        var header = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(1024, pdfBytes.Length));
-        return header.Contains("/Linearized");
-    }
-
-    private bool CheckIfEncrypted(byte[] pdfBytes)
-    {
-        // Tìm từ khóa /Encrypt trong file
-        // var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
-        // return content.Contains("/Encrypt");
-
-        int bytesToCheck = Math.Min(1024 * 1024, pdfBytes.Length);
-        var content = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, bytesToCheck);
-        return content.Contains("/Encrypt");
-    }
-
-    private bool CheckForDigitalSignature(byte[] pdfBytes)
-    {
-        // Tìm từ khóa /ByteRange và /Contents (thường xuất hiện trong chữ ký số)
-        // var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
-        // return content.Contains("/ByteRange") && content.Contains("/Contents");
-
-        int bytesToCheck = Math.Min(1024 * 1024, pdfBytes.Length);
-        var startContent = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, bytesToCheck);
-
-        if (pdfBytes.Length > bytesToCheck * 2)
-        {
-            var endContent = System.Text.Encoding.ASCII.GetString(
-                pdfBytes,
-                pdfBytes.Length - bytesToCheck,
-                bytesToCheck
-            );
-            return (startContent.Contains("/ByteRange") && startContent.Contains("/Contents")) ||
-                   (endContent.Contains("/ByteRange") && endContent.Contains("/Contents"));
-        }
-
-        return startContent.Contains("/ByteRange") && startContent.Contains("/Contents");
-    }
-
-    private bool CheckForAcroForms(byte[] pdfBytes)
-    {
-        // Tìm từ khóa /AcroForm
-        var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
-        return content.Contains("/AcroForm");
-    }
-
-    private bool IsPdfA(byte[] pdfBytes)
-    {
-        // Tìm metadata cho PDF/A
-        var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
-        return content.Contains("pdfaid:conformance");
-    }
-
-    private bool IsPdfX(byte[] pdfBytes)
-    {
-        // Tìm metadata cho PDF/X
-        var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
-        return content.Contains("GTS_PDFXVersion");
-    }
+    }   
 
     private async Task ProcessStandardPdf(byte[] pdfBytes)
     {
@@ -367,18 +216,19 @@ else
     {
         try
         {
-            // Implement logic để mở khóa PDF với mật khẩu
-            // Đây là một placeholder, bạn cần implement logic thực tế
+
             if (!string.IsNullOrEmpty(pdfPassword))
             {
-                // Giả sử mở khóa thành công
-                // await ProcessStandardPdf(/* decrypted pdf bytes */);
+
+                var pdfBytesUnlock = await Service.PdfService.UnlockPdf(originalPdfBytes, pdfPassword);
+
+                await ProcessStandardPdf(pdfBytesUnlock);
                 canDisplayPdf = true;
             }
         }
         catch (Exception ex)
         {
-            currentPdfAnalysis.ErrorMessage = "Mật khẩu không đúng";
+            currentPdfAnalysis.ErrorMessage = "Mở khóa thất bại: " + ex.Message;
         }
     }
 
@@ -394,6 +244,7 @@ else
             currentPdfAnalysis.ErrorMessage = "Không thể khôi phục file PDF";
         }
     }
+
 
     private async Task HandleIframeLoad()
     {
@@ -427,6 +278,13 @@ else
         if (!string.IsNullOrEmpty(pdfDataUrl) && pdfDataUrl.StartsWith("blob:"))
         {
             await JS.InvokeVoidAsync("revokeBlobUrl", pdfDataUrl);
+        }
+    }
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await UnlockPdf();
         }
     }
 
