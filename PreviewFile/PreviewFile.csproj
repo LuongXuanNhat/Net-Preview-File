@@ -4,9 +4,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-	  <PublishDir>wwwroot\publish\</PublishDir>
+	  <PublishDir>docs\</PublishDir>
 	  <BlazorWebAssemblyEnableLinker>true</BlazorWebAssemblyEnableLinker>
 	  <UseWasm>true</UseWasm>
+	  <BaseHref>/</BaseHref>
   </PropertyGroup>
 
   <ItemGroup>
