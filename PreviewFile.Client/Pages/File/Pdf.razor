@@ -12,13 +12,13 @@
 @if (pdfLoadingStatus == LoadingStatus.Loaded)
 {
     <div class="pdf-preview">
-        @if (currentPdfAnalysis.Type == PdfType.Secured)
+    @*     @if (currentPdfAnalysis.Type == PdfType.Secured)
         {
             <div class="password-prompt">
                 <input type="password" @bind="pdfPassword" placeholder="Nhập mật khẩu PDF" @onkeydown="HandleKeyDown" />
                 <button @onclick="UnlockPdf" >Mở khóa</button>
             </div>
-        }
+        } *@
 
         @if (canDisplayPdf)
         {
@@ -107,7 +107,7 @@ else
 
             currentPdfAnalysis = await Service.PdfService.AnalyzePdfAsync(pdfBytes);
 
-            // Xử lý theo loại PDF
+            // Handle by pdf type
             switch (currentPdfAnalysis.Type)
             {
                 case PdfType.Standard:
@@ -118,7 +118,7 @@ else
                     break;
 
                 case PdfType.Secured:
-                    canDisplayPdf = false;
+                    await ProcessStandardPdf(pdfBytes);
                     break;
 
                 case PdfType.Digital_Signed:
@@ -185,7 +185,7 @@ else
         catch (Exception ex)
         {
             Console.WriteLine($"Error in ProcessStandardPdf: {ex.Message}");
-            currentPdfAnalysis.ErrorMessage = $"Lỗi khi xử lý PDF: {ex.Message}";
+            currentPdfAnalysis.ErrorMessage = $"Error when handle pdf file: {ex.Message}";
             canDisplayPdf = false;
         }
     }
@@ -207,41 +207,50 @@ else
 
     private async Task<bool> ValidateDigitalSignature(byte[] pdfBytes)
     {
-        // Implement logic để xác thực chữ ký số
-        // Đây là một placeholder, bạn cần implement logic thực tế
+        // Implement logic 
         return true;
     }
 
-    private async Task UnlockPdf()
-    {
-        try
-        {
 
-            if (!string.IsNullOrEmpty(pdfPassword))
-            {
 
-                var pdfBytesUnlock = await Service.PdfService.UnlockPdf(originalPdfBytes, pdfPassword);
+    // Manual decoding
 
-                await ProcessStandardPdf(pdfBytesUnlock);
-                canDisplayPdf = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            currentPdfAnalysis.ErrorMessage = "Mở khóa thất bại: " + ex.Message;
-        }
-    }
+    // private async Task HandleKeyDown(KeyboardEventArgs e)
+    // {
+    //     if (e.Key == "Enter")
+    //     {
+    //         await UnlockPdf();
+    //     }
+    // }
+    // private async Task UnlockPdf()
+    // {
+    //     try
+    //     {
+
+    //         if (!string.IsNullOrEmpty(pdfPassword))
+    //         {
+
+    //             var pdfBytesUnlock = await Service.PdfService.UnlockPdf(originalPdfBytes, pdfPassword);
+
+    //             await ProcessStandardPdf(pdfBytesUnlock);
+    //             canDisplayPdf = true;
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         currentPdfAnalysis.ErrorMessage = "Mở khóa thất bại: " + ex.Message;
+    //     }
+    // }
 
     private async Task AttemptRepair()
     {
         try
         {
-            // Implement logic để sửa chữa PDF bị hỏng
-            // Đây là một placeholder, bạn cần implement logic thực tế
+            // Implement logic to fix pdf is corrupted
         }
         catch (Exception ex)
         {
-            currentPdfAnalysis.ErrorMessage = "Không thể khôi phục file PDF";
+            currentPdfAnalysis.ErrorMessage = "Can't restore PDF";
         }
     }
 
@@ -280,12 +289,6 @@ else
             await JS.InvokeVoidAsync("revokeBlobUrl", pdfDataUrl);
         }
     }
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await UnlockPdf();
-        }
-    }
+    
 
 }
