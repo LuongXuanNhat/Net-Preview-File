@@ -22,36 +22,30 @@ namespace PreviewFile.Service
             try
             {
                 Console.WriteLine("FileSize: " + pdfBytes.Length / (1024 * 1024));
-                if (pdfBytes.Length > 100 * 1024 * 1024) // Nếu lớn hơn 100MB
+                if (pdfBytes.Length > 100 * 1024 * 1024) 
                 {
                     result.Type = PdfType.Unsupported;
                     result.ErrorMessage = "File quá lớn, vui lòng sử dụng file nhỏ hơn 100MB";
                     return result;
                 }
-                // 1. Kiểm tra signature cơ bản
                 if (!IsValidPdfSignature(pdfBytes))
                 {
                     result.Type = PdfType.Corrupted;
                     return result;
                 }
 
-                // 2. Đọc version
                 result.Version = ExtractPdfVersion(pdfBytes);
 
-                // 3. Kiểm tra PDF có được linearized không
                 result.IsLinearized = CheckIfLinearized(pdfBytes);
 
-                // 4. Kiểm tra encryption
                 result.IsEncrypted = CheckIfEncrypted(pdfBytes);
 
-                // 5. Kiểm tra chữ ký số
                 result.IsDigitallySigned = CheckForDigitalSignature(pdfBytes);
 
-                // 6. Kiểm tra forms
                 result.HasForms = CheckForAcroForms(pdfBytes);
 
                 Console.WriteLine("FileType: " + result.Type);
-                // Xác định loại PDF
+   
                 if (result.IsEncrypted)
                 {
                     result.Type = PdfType.Secured;
@@ -96,7 +90,7 @@ namespace PreviewFile.Service
             if (pdfBytes == null || pdfBytes.Length < 5)
                 return false;
 
-            // Kiểm tra header PDF
+            // Check header PDF
             return pdfBytes[0] == '%' &&
                    pdfBytes[1] == 'P' &&
                    pdfBytes[2] == 'D' &&
@@ -105,7 +99,7 @@ namespace PreviewFile.Service
         }
         private string ExtractPdfVersion(byte[] pdfBytes)
         {
-            // Tìm version trong header PDF
+            // Find version in header PDF
             var header = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(32, pdfBytes.Length));
             var versionMatch = Regex.Match(header, @"%PDF-(\d+\.\d+)");
             return versionMatch.Success ? versionMatch.Groups[1].Value : "Unknown";
@@ -113,14 +107,14 @@ namespace PreviewFile.Service
 
         private bool CheckIfLinearized(byte[] pdfBytes)
         {
-            // Tìm từ khóa /Linearized trong 1024 bytes đầu tiên
+            // Find Linearized in 1024 first bytes 
             var header = System.Text.Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(1024, pdfBytes.Length));
             return header.Contains("/Linearized");
         }
 
         private bool CheckIfEncrypted(byte[] pdfBytes)
         {
-            // Tìm từ khóa /Encrypt trong file
+            // Find key: /Encrypt in file
             // var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
             // return content.Contains("/Encrypt");
 
@@ -131,7 +125,7 @@ namespace PreviewFile.Service
 
         private bool CheckForDigitalSignature(byte[] pdfBytes)
         {
-            // Tìm từ khóa /ByteRange và /Contents (thường xuất hiện trong chữ ký số)
+            // Find key: /ByteRange và /Contents (often appears printed with a digital signature)
             // var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
             // return content.Contains("/ByteRange") && content.Contains("/Contents");
 
@@ -154,7 +148,7 @@ namespace PreviewFile.Service
 
         private bool CheckForAcroForms(byte[] pdfBytes)
         {
-            // Tìm từ khóa /AcroForm
+            // Find key: /AcroForm
             var content = System.Text.Encoding.ASCII.GetString(pdfBytes);
             return content.Contains("/AcroForm");
         }

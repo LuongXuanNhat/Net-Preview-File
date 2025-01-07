@@ -192,7 +192,7 @@ else
 
     private async Task ProcessSignedPdf(byte[] pdfBytes)
     {
-        // Xác thực chữ ký số
+        // Confirm 
         bool isValidSignature = await ValidateDigitalSignature(pdfBytes);
         if (isValidSignature)
         {
@@ -264,19 +264,17 @@ else
     {
         Console.WriteLine($"Error loading PDF in iframe. URL: {pdfDataUrl}");
 
-        // Thử kiểm tra URL
         if (string.IsNullOrEmpty(pdfDataUrl))
         {
-            currentPdfAnalysis.ErrorMessage = "URL không hợp lệ";
+            currentPdfAnalysis.ErrorMessage = "URL invalid";
         }
         else if (pdfDataUrl.StartsWith("blob:"))
         {
-            // Nếu là Blob URL, thử tạo lại
-            await ProcessStandardPdf(originalPdfBytes); // Lưu bytes gốc trong một field
+            await ProcessStandardPdf(originalPdfBytes);
         }
         else
         {
-            currentPdfAnalysis.ErrorMessage = "Không thể hiển thị PDF trong trình duyệt";
+            currentPdfAnalysis.ErrorMessage = "Can't display in browser";
         }
 
         canDisplayPdf = false;
