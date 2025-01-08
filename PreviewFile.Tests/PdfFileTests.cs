@@ -2,6 +2,7 @@
 using Moq;
 using PreviewFile.Domain.Dtos;
 using PreviewFile.Tests.TestResources;
+using PreviewFile.Service.Helper;
 
 namespace PreviewFile.Tests
 {
@@ -41,7 +42,7 @@ namespace PreviewFile.Tests
             var expectedResult = new PdfFile
             {
                 Type = PdfType.Unsupported,
-                ErrorMessage = "File quá lớn, vui lòng sử dụng file nhỏ hơn 100MB"
+                ErrorMessage = TranslateHelper.Pdf.ErrorLargeFile
             };
             _pdfServiceMock.Setup(service => service.AnalyzePdfAsync(pdfBytes))
                            .ReturnsAsync(expectedResult);
@@ -49,7 +50,7 @@ namespace PreviewFile.Tests
             var result = await _pdfServiceMock.Object.AnalyzePdfAsync(pdfBytes);
 
             Assert.That(result.Type, Is.EqualTo(PdfType.Unsupported));
-            Assert.That(result.ErrorMessage, Is.EqualTo("File quá lớn, vui lòng sử dụng file nhỏ hơn 100MB"));
+            Assert.That(result.ErrorMessage, Is.EqualTo(TranslateHelper.Pdf.ErrorLargeFile));
         }
 
         [Test]

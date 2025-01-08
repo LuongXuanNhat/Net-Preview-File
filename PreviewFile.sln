@@ -11,7 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PreviewFile.Service", "Prev
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PreviewFile.Domain", "PreviewFile.Domain\PreviewFile.Domain.csproj", "{495D6817-C52F-4849-BEB4-7255D8ADA4CF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PreviewFile.Tests", "PreviewFile.Tests\PreviewFile.Tests.csproj", "{9992B135-A97B-4C0C-98F6-FE1845D96DB3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PreviewFile.Tests", "PreviewFile.Tests\PreviewFile.Tests.csproj", "{9992B135-A97B-4C0C-98F6-FE1845D96DB3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

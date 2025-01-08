@@ -10,4 +10,28 @@
     <ProjectReference Include="..\PreviewFile.Domain\PreviewFile.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Update="Translator\en\pdf.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>pdf.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Translator\vi\pdf.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>pdf.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Translator\en\pdf.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>pdf.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Translator\vi\pdf.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>pdf.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>

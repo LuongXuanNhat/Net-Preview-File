@@ -1,4 +1,5 @@
 ﻿using PreviewFile.Domain.Dtos;
+using PreviewFile.Service.Helper;
 using System.Text.RegularExpressions;
 
 namespace PreviewFile.Service
@@ -25,7 +26,7 @@ namespace PreviewFile.Service
                 if (pdfBytes.Length > 100 * 1024 * 1024) 
                 {
                     result.Type = PdfType.Unsupported;
-                    result.ErrorMessage = "File quá lớn, vui lòng sử dụng file nhỏ hơn 100MB";
+                    result.ErrorMessage = TranslateHelper.Pdf.ErrorLargeFile;
                     return result;
                 }
                 if (!IsValidPdfSignature(pdfBytes))
